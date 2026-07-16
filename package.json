@@ -5,7 +5,9 @@
   "description": "Melody Islands — modular piano learning adventure for kids (~age 7)",
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "BUILD_TARGET=swa next build",
+    "build:swa": "BUILD_TARGET=swa next build",
+    "build:appservice": "BUILD_TARGET=appservice next build",
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",

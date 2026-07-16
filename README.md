@@ -65,41 +65,61 @@ See `src/modules/index.ts` for the registry.
 
 ## Azure deployment
 
-### Option A — one-shot script (CLI)
+### Option A — Azure Static Web Apps (recommended for this repo)
+
+The app ships as a **Next.js static export** into the `out/` folder.
+
+> **Not `build`.** Oryx defaults (React/CRA) look for `build/` and fail with:
+> `The app build failed to produce artifact folder: 'build'`.
+
+#### Portal settings (if you linked GitHub in Deployment Center)
+
+| Setting | Value |
+|--------|--------|
+| App location | `/` |
+| Api location | *(empty)* |
+| **Output location** | **`out`** ← change from `build` |
+| Build command (optional) | `npm run build` |
+
+Or use the workflow in `.github/workflows/azure-static-web-apps.yml`:
+
+1. Portal → Static Web App → **Manage deployment token** → copy token.  
+2. GitHub → repo **Settings → Secrets and variables → Actions** → new secret:  
+   `AZURE_STATIC_WEB_APPS_API_TOKEN` = that token.  
+3. Push to `main` (or re-run the workflow).
+
+Local check:
 
 ```bash
-brew install azure-cli   # if needed
-az login
-export APP_NAME=melody-islands-YOURUNIQUE
-export RESOURCE_GROUP=melody-islands-rg
-export LOCATION=eastus
-npm run deploy:azure
+npm run build:swa
+ls out   # must exist
 ```
 
-This runs `scripts/deploy-azure.sh`: creates RG + App Service (Bicep), builds Next.js **standalone**, zip-deploys.
-
-### Option B — GitHub Actions
-
-1. Create the App Service (script or Portal).
-2. Download the publish profile from Azure Portal → Web App → **Get publish profile**.
-3. Add secret `AZURE_WEBAPP_PUBLISH_PROFILE` in GitHub.
-4. Set `AZURE_WEBAPP_NAME` in `.github/workflows/azure-deploy.yml`.
-5. Push to `main`.
-
-### Option C — Docker / Container Apps
+### Option B — Azure App Service (Node, full server)
 
 ```bash
+az login
+export APP_NAME=your-app-name
+export RESOURCE_GROUP=your-rg
+export LOCATION=eastus
+npm run build:appservice
+# then scripts/deploy-azure.sh or zip deploy of .next/standalone
+```
+
+Restore API routes from `src/server/api-routes/` into `src/app/api/` if you need `/api/progress` again.
+
+### Option C — Docker
+
+```bash
+# Dockerfile expects standalone build
+BUILD_TARGET=appservice npm run build:appservice
 docker build -t melody-islands .
-docker run -p 3000:3000 melody-islands
-# then push to ACR and deploy to Azure Container Apps / App Service Web App for Containers
 ```
 
 ### Infrastructure as code
 
 - `infra/main.bicep` — Linux App Service + plan  
-- `infra/parameters.json` — sample parameters  
-
-Health probe: `GET /api/health`
+- `staticwebapp.config.json` / `public/staticwebapp.config.json` — SWA routes
 
 ---
 

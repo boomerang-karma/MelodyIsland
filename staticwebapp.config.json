@@ -1,0 +1,30 @@
+{
+  "navigationFallback": {
+    "rewrite": "/index.html",
+    "exclude": [
+      "/_next/*",
+      "/api/*",
+      "*.css",
+      "*.js",
+      "*.ico",
+      "*.png",
+      "*.jpg",
+      "*.svg",
+      "*.woff",
+      "*.woff2"
+    ]
+  },
+  "globalHeaders": {
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "strict-origin-when-cross-origin"
+  },
+  "mimeTypes": {
+    ".json": "application/json"
+  },
+  "routes": [
+    {
+      "route": "/api/*",
+      "statusCode": 404
+    }
+  ]
+}
