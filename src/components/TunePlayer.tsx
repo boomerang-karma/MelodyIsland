@@ -31,7 +31,9 @@ const DEFAULT_SPEED = 0.7;
 
 export function TunePlayer({ tune, companion, onComplete, onExit }: Props) {
   const baseSong = getFamousSong(tune.songId);
-  const scorerRef = useRef(new Scorer({ timingWindowMs: 240 }));
+  const scorerRef = useRef(
+    new Scorer({ timingWindowMs: 240, mode: "learn" }),
+  );
   const trackRef = useRef<SongTrack | null>(null);
   const micRef = useRef<MicNoteInput | null>(null);
   const touchRef = useRef<TouchNoteInput | null>(null);
@@ -89,10 +91,13 @@ export function TunePlayer({ tune, companion, onComplete, onExit }: Props) {
       confidence: number;
     }) => {
       setLastMidi(event.pitch.midi);
-      playTone(event.pitch.frequencyHz, 140, 0.1);
+      // Keyboard already plays tone; avoid double-beep on touch path
+      if (event.source !== "touch") {
+        playTone(event.pitch.frequencyHz, 140, 0.1);
+      }
       const track = trackRef.current;
       if (!track) return;
-      scorerRef.current.allowTouchCredit = useTouch;
+      scorerRef.current.allowTouchCredit = true; // learn mode: on-screen keys always count
       const result = scorerRef.current.process(event as never);
       setFeedback(result.feedback);
       setMood(
@@ -101,20 +106,12 @@ export function TunePlayer({ tune, companion, onComplete, onExit }: Props) {
           result.hit,
         ),
       );
-      if (result.hit && result.expected) {
+      // Always sync guide/sequence from scorer (learn mode advances on correct pitch)
+      const matched = scorerRef.current.getMatchedIndices();
+      setHitIndices(matched);
+      if (result.hit) {
         setMissFlash(false);
-        setHitIndices((prev) => {
-          const next = new Set(prev);
-          const idx = track.notes.findIndex(
-            (n) =>
-              n.startMs === result.expected!.startMs &&
-              n.pitch.midi === result.expected!.pitch.midi,
-          );
-          if (idx >= 0) next.add(idx);
-          return next;
-        });
       } else {
-        // Flash the current sequence step so kids see what was expected
         setMissFlash(true);
         if (missTimer.current) clearTimeout(missTimer.current);
         missTimer.current = setTimeout(() => setMissFlash(false), 450);
@@ -123,7 +120,7 @@ export function TunePlayer({ tune, companion, onComplete, onExit }: Props) {
       setProgress(p);
       if (p.total > 0 && p.matched >= p.total) finish();
     },
-    [useTouch, finish],
+    [finish],
   );
 
   const beginRound = useCallback(
@@ -136,9 +133,10 @@ export function TunePlayer({ tune, companion, onComplete, onExit }: Props) {
       setHitIndices(new Set());
       scorerRef.current = new Scorer({
         timingWindowMs: Math.round(240 / Math.max(0.5, speedForRound)),
+        mode: "learn",
       });
       scorerRef.current.loadTrack(track);
-      scorerRef.current.allowTouchCredit = useTouch;
+      scorerRef.current.allowTouchCredit = true;
       scorerRef.current.begin(performance.now());
       setProgress({ matched: 0, total: track.notes.length, accuracy: 0 });
 

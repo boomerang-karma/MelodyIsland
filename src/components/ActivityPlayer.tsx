@@ -131,22 +131,11 @@ export function ActivityPlayer({ activity, companion, onComplete, onExit }: Prop
         result.hit,
       ),
     );
-    if (result.hit && result.expected) {
+    // Sync sequence + glowing keys from scorer (learn mode advances on pitch)
+    setHitIndices(scorerRef.current.getMatchedIndices());
+    if (result.hit) {
       missStreak.current = 0;
       setMissFlash(false);
-      setHitIndices((prev) => {
-        const next = new Set(prev);
-        const track = trackRef.current ?? song;
-        if (track) {
-          const idx = track.notes.findIndex(
-            (n) =>
-              n.startMs === result.expected!.startMs &&
-              n.pitch.midi === result.expected!.pitch.midi,
-          );
-          if (idx >= 0) next.add(idx);
-        }
-        return next;
-      });
     } else {
       missStreak.current += 1;
       setMissFlash(true);
@@ -238,11 +227,13 @@ export function ActivityPlayer({ activity, companion, onComplete, onExit }: Prop
       trackRef.current = track;
       scorerRef.current = new Scorer({
         timingWindowMs: Math.round(200 / Math.max(0.5, speedForRound)),
+        mode: "learn", // glowing key advances on correct pitch anytime
       });
       scorerRef.current.loadTrack(track);
-      scorerRef.current.allowTouchCredit = useTouch;
+      scorerRef.current.allowTouchCredit = true;
       scorerRef.current.begin(performance.now());
       setProgress({ matched: 0, total: track.notes.length, accuracy: 0 });
+      setHitIndices(new Set());
     }
 
     if (isNaming) {
