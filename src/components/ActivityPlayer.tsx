@@ -9,6 +9,7 @@ import { Scorer } from "@/modules/scoring";
 import { moodFromTiming } from "@/modules/companion";
 import { CompanionBubble } from "./CompanionBubble";
 import { FallingNotes } from "./FallingNotes";
+import { NoteSequenceGuide } from "./NoteSequenceGuide";
 import { PianoKeyboard } from "./PianoKeyboard";
 import { SpeedBar } from "./SpeedBar";
 import { Button } from "./ui/Button";
@@ -47,6 +48,8 @@ export function ActivityPlayer({ activity, companion, onComplete, onExit }: Prop
   const [rhythmBeats, setRhythmBeats] = useState(0);
   const [elapsedMs, setElapsedMs] = useState(0);
   const [speed, setSpeed] = useState(0.75);
+  const [missFlash, setMissFlash] = useState(false);
+  const missTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const song = baseSong ? scaleTrackTempo(baseSong, speed) : undefined;
   const isNaming = activity.type === "note_naming";
@@ -130,6 +133,7 @@ export function ActivityPlayer({ activity, companion, onComplete, onExit }: Prop
     );
     if (result.hit && result.expected) {
       missStreak.current = 0;
+      setMissFlash(false);
       setHitIndices((prev) => {
         const next = new Set(prev);
         const track = trackRef.current ?? song;
@@ -145,6 +149,9 @@ export function ActivityPlayer({ activity, companion, onComplete, onExit }: Prop
       });
     } else {
       missStreak.current += 1;
+      setMissFlash(true);
+      if (missTimer.current) clearTimeout(missTimer.current);
+      missTimer.current = setTimeout(() => setMissFlash(false), 450);
     }
     setProgress(scorerRef.current.getProgress());
     const { matched, total } = scorerRef.current.getProgress();
@@ -269,6 +276,7 @@ export function ActivityPlayer({ activity, companion, onComplete, onExit }: Prop
     return () => {
       micRef.current?.stop();
       touchRef.current?.stop();
+      if (missTimer.current) clearTimeout(missTimer.current);
     };
   }, []);
 
@@ -355,13 +363,22 @@ export function ActivityPlayer({ activity, companion, onComplete, onExit }: Prop
       {phase === "play" && (
         <div className="space-y-4">
           {usesFallingNotes && (trackRef.current || song) && (
-            <FallingNotes
-              track={trackRef.current ?? song!}
-              playing={playing}
-              elapsedMs={elapsedMs}
-              hitIndices={hitIndices}
-              speed={speed}
-            />
+            <div className="relative">
+              <FallingNotes
+                track={trackRef.current ?? song!}
+                playing={playing}
+                elapsedMs={elapsedMs}
+                hitIndices={hitIndices}
+                speed={speed}
+              />
+              <div className="mt-2 sm:mt-0 sm:absolute sm:top-2 sm:right-2 sm:z-20 sm:w-[min(52%,17rem)]">
+                <NoteSequenceGuide
+                  track={trackRef.current ?? song!}
+                  hitIndices={hitIndices}
+                  missFlash={missFlash}
+                />
+              </div>
+            </div>
           )}
 
           {isNaming && (

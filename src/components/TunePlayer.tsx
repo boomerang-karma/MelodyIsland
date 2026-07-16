@@ -8,6 +8,7 @@ import { MicNoteInput, TouchNoteInput, playTone } from "@/modules/audio";
 import { Scorer } from "@/modules/scoring";
 import { moodFromTiming } from "@/modules/companion";
 import { FallingNotes } from "./FallingNotes";
+import { NoteSequenceGuide } from "./NoteSequenceGuide";
 import { PianoKeyboard } from "./PianoKeyboard";
 import { SpeedBar } from "./SpeedBar";
 import { Button } from "./ui/Button";
@@ -44,6 +45,8 @@ export function TunePlayer({ tune, companion, onComplete, onExit }: Props) {
   const [useTouch, setUseTouch] = useState(true);
   const [demoPlaying, setDemoPlaying] = useState(false);
   const [speed, setSpeed] = useState(DEFAULT_SPEED);
+  const [missFlash, setMissFlash] = useState(false);
+  const missTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const song = useMemo(
     () => (baseSong ? scaleTrackTempo(baseSong, speed) : undefined),
@@ -95,6 +98,7 @@ export function TunePlayer({ tune, companion, onComplete, onExit }: Props) {
         ),
       );
       if (result.hit && result.expected) {
+        setMissFlash(false);
         setHitIndices((prev) => {
           const next = new Set(prev);
           const idx = track.notes.findIndex(
@@ -105,6 +109,11 @@ export function TunePlayer({ tune, companion, onComplete, onExit }: Props) {
           if (idx >= 0) next.add(idx);
           return next;
         });
+      } else {
+        // Flash the current sequence step so kids see what was expected
+        setMissFlash(true);
+        if (missTimer.current) clearTimeout(missTimer.current);
+        missTimer.current = setTimeout(() => setMissFlash(false), 450);
       }
       const p = scorerRef.current.getProgress();
       setProgress(p);
@@ -191,6 +200,7 @@ export function TunePlayer({ tune, companion, onComplete, onExit }: Props) {
       demoCancel.current = true;
       micRef.current?.stop();
       touchRef.current?.stop();
+      if (missTimer.current) clearTimeout(missTimer.current);
     };
   }, []);
 
@@ -261,13 +271,24 @@ export function TunePlayer({ tune, companion, onComplete, onExit }: Props) {
 
       {phase === "play" && (
         <div className="space-y-4">
-          <FallingNotes
-            track={activeTrack}
-            playing={playing}
-            elapsedMs={0}
-            hitIndices={hitIndices}
-            speed={speed}
-          />
+          {/* Falling notes + upper-right sequence map (always visible reference) */}
+          <div className="relative">
+            <FallingNotes
+              track={activeTrack}
+              playing={playing}
+              elapsedMs={0}
+              hitIndices={hitIndices}
+              speed={speed}
+            />
+            <div className="mt-2 sm:mt-0 sm:absolute sm:top-2 sm:right-2 sm:z-20 sm:w-[min(52%,17rem)]">
+              <NoteSequenceGuide
+                track={activeTrack}
+                hitIndices={hitIndices}
+                missFlash={missFlash}
+              />
+            </div>
+          </div>
+
           <div className="piano-stage piano-stage--hero">
             <PianoKeyboard
               size="kid"
