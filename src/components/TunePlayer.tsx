@@ -1,14 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ActivityResult, CompanionMood, FamousTune } from "@/modules/core";
-import { pitchLabel } from "@/modules/core";
-import { getFamousSong } from "@/modules/curriculum";
+import { pitchLabel, type SongTrack } from "@/modules/core";
+import { getFamousSong, scaleTrackTempo } from "@/modules/curriculum";
 import { MicNoteInput, TouchNoteInput, playTone } from "@/modules/audio";
 import { Scorer } from "@/modules/scoring";
 import { moodFromTiming } from "@/modules/companion";
 import { FallingNotes } from "./FallingNotes";
 import { PianoKeyboard } from "./PianoKeyboard";
+import { SpeedBar } from "./SpeedBar";
 import { Button } from "./ui/Button";
 import type { CompanionState } from "@/modules/core";
 import { CompanionBubble } from "./CompanionBubble";
@@ -20,12 +21,17 @@ interface Props {
   onExit: () => void;
 }
 
+/** Default under 100% so first tries feel calmer for age ~7 */
+const DEFAULT_SPEED = 0.7;
+
 export function TunePlayer({ tune, companion, onComplete, onExit }: Props) {
-  const song = getFamousSong(tune.songId);
-  const scorerRef = useRef(new Scorer({ timingWindowMs: 220 }));
+  const baseSong = getFamousSong(tune.songId);
+  const scorerRef = useRef(new Scorer({ timingWindowMs: 240 }));
+  const trackRef = useRef<SongTrack | null>(null);
   const micRef = useRef<MicNoteInput | null>(null);
   const touchRef = useRef<TouchNoteInput | null>(null);
   const startedAt = useRef(new Date().toISOString());
+  const demoCancel = useRef(false);
 
   const [phase, setPhase] = useState<"intro" | "play" | "done">("intro");
   const [playing, setPlaying] = useState(false);
@@ -37,6 +43,12 @@ export function TunePlayer({ tune, companion, onComplete, onExit }: Props) {
   const [stars, setStars] = useState<0 | 1 | 2 | 3>(0);
   const [useTouch, setUseTouch] = useState(true);
   const [demoPlaying, setDemoPlaying] = useState(false);
+  const [speed, setSpeed] = useState(DEFAULT_SPEED);
+
+  const song = useMemo(
+    () => (baseSong ? scaleTrackTempo(baseSong, speed) : undefined),
+    [baseSong, speed],
+  );
 
   const finish = useCallback(() => {
     setPlaying(false);
@@ -45,7 +57,7 @@ export function TunePlayer({ tune, companion, onComplete, onExit }: Props) {
     setPhase("done");
     setMood("cheer");
     const skillDeltas: Record<string, number> = {};
-    (song?.skillIds ?? []).forEach((id) => {
+    (baseSong?.skillIds ?? []).forEach((id) => {
       skillDeltas[id] = s >= 1 ? 1 : -0.2;
     });
     onComplete?.({
@@ -58,7 +70,7 @@ export function TunePlayer({ tune, companion, onComplete, onExit }: Props) {
       attempts: scorerRef.current.getResults(),
       skillDeltas,
     });
-  }, [onComplete, song?.skillIds, tune.id]);
+  }, [onComplete, baseSong?.skillIds, tune.id]);
 
   const handleNote = useCallback(
     (event: {
@@ -71,7 +83,8 @@ export function TunePlayer({ tune, companion, onComplete, onExit }: Props) {
     }) => {
       setLastMidi(event.pitch.midi);
       playTone(event.pitch.frequencyHz, 140, 0.1);
-      if (!song) return;
+      const track = trackRef.current;
+      if (!track) return;
       scorerRef.current.allowTouchCredit = useTouch;
       const result = scorerRef.current.process(event as never);
       setFeedback(result.feedback);
@@ -84,7 +97,7 @@ export function TunePlayer({ tune, companion, onComplete, onExit }: Props) {
       if (result.hit && result.expected) {
         setHitIndices((prev) => {
           const next = new Set(prev);
-          const idx = song.notes.findIndex(
+          const idx = track.notes.findIndex(
             (n) =>
               n.startMs === result.expected!.startMs &&
               n.pitch.midi === result.expected!.pitch.midi,
@@ -97,60 +110,91 @@ export function TunePlayer({ tune, companion, onComplete, onExit }: Props) {
       setProgress(p);
       if (p.total > 0 && p.matched >= p.total) finish();
     },
-    [song, useTouch, finish],
+    [useTouch, finish],
   );
 
-  async function startPlay() {
-    if (!song) return;
-    startedAt.current = new Date().toISOString();
-    setPhase("play");
-    setHitIndices(new Set());
-    scorerRef.current.loadTrack(song);
-    scorerRef.current.allowTouchCredit = useTouch;
-    scorerRef.current.begin(performance.now());
-    setProgress({ matched: 0, total: song.notes.length, accuracy: 0 });
+  const beginRound = useCallback(
+    async (speedForRound: number) => {
+      if (!baseSong) return;
+      const track = scaleTrackTempo(baseSong, speedForRound);
+      trackRef.current = track;
+      startedAt.current = new Date().toISOString();
+      setPhase("play");
+      setHitIndices(new Set());
+      scorerRef.current = new Scorer({
+        timingWindowMs: Math.round(240 / Math.max(0.5, speedForRound)),
+      });
+      scorerRef.current.loadTrack(track);
+      scorerRef.current.allowTouchCredit = useTouch;
+      scorerRef.current.begin(performance.now());
+      setProgress({ matched: 0, total: track.notes.length, accuracy: 0 });
 
-    touchRef.current = new TouchNoteInput();
-    await touchRef.current.start();
-    touchRef.current.onNote(handleNote);
+      touchRef.current?.stop();
+      micRef.current?.stop();
 
-    if (!useTouch) {
-      try {
-        micRef.current = new MicNoteInput();
-        await micRef.current.start();
-        micRef.current.onNote(handleNote);
-      } catch {
-        setUseTouch(true);
-        scorerRef.current.allowTouchCredit = true;
+      touchRef.current = new TouchNoteInput();
+      await touchRef.current.start();
+      touchRef.current.onNote(handleNote);
+
+      if (!useTouch) {
+        try {
+          micRef.current = new MicNoteInput();
+          await micRef.current.start();
+          micRef.current.onNote(handleNote);
+        } catch {
+          setUseTouch(true);
+          scorerRef.current.allowTouchCredit = true;
+        }
       }
+      setPlaying(true);
+      setFeedback(
+        speedForRound < 0.85
+          ? `Nice and easy — ${tune.title} at ${Math.round(speedForRound * 100)}% speed!`
+          : `Play along — ${tune.title}!`,
+      );
+    },
+    [baseSong, useTouch, handleNote, tune.title],
+  );
+
+  function onSpeedChange(next: number) {
+    setSpeed(next);
+    demoCancel.current = true;
+    if (phase === "play") {
+      setFeedback(`Speed set to ${Math.round(next * 100)}% — restarting gently…`);
+      void beginRound(next);
     }
-    setPlaying(true);
-    setFeedback(`Play along — ${tune.title}!`);
   }
 
   async function playDemo() {
-    if (!song || demoPlaying) return;
+    if (!baseSong || demoPlaying) return;
+    demoCancel.current = false;
+    const track = scaleTrackTempo(baseSong, speed);
     setDemoPlaying(true);
     const t0 = performance.now();
-    for (const note of song.notes) {
+    for (const note of track.notes) {
+      if (demoCancel.current) break;
       const wait = note.startMs - (performance.now() - t0);
       if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+      if (demoCancel.current) break;
       setLastMidi(note.pitch.midi);
       playTone(note.pitch.frequencyHz, Math.max(120, note.durationMs * 0.9), 0.22);
-      setFeedback(`Demo: ${pitchLabel(note.pitch)}`);
+      setFeedback(`Demo (${Math.round(speed * 100)}%): ${pitchLabel(note.pitch)}`);
     }
     setDemoPlaying(false);
-    setFeedback("Your turn! Press Start when ready.");
+    if (!demoCancel.current) {
+      setFeedback("Your turn! Adjust speed if needed, then press Start.");
+    }
   }
 
   useEffect(() => {
     return () => {
+      demoCancel.current = true;
       micRef.current?.stop();
       touchRef.current?.stop();
     };
   }, []);
 
-  if (!song) {
+  if (!baseSong || !song) {
     return (
       <div className="text-white">
         Song data missing.{" "}
@@ -160,6 +204,7 @@ export function TunePlayer({ tune, companion, onComplete, onExit }: Props) {
   }
 
   const diffStars = "★".repeat(tune.difficulty) + "☆".repeat(3 - tune.difficulty);
+  const activeTrack = trackRef.current && phase === "play" ? trackRef.current : song;
 
   return (
     <div className="space-y-4">
@@ -184,15 +229,24 @@ export function TunePlayer({ tune, companion, onComplete, onExit }: Props) {
         {feedback}
       </div>
 
+      {(phase === "intro" || phase === "play") && (
+        <SpeedBar
+          value={speed}
+          onChange={onSpeedChange}
+          disabled={demoPlaying}
+        />
+      )}
+
       {phase === "intro" && (
         <div className="space-y-4">
           <p className="text-white/75 text-sm leading-relaxed">{tune.blurb}</p>
           <p className="text-white/50 text-xs">
             Simplified learning arrangement · ~{tune.estimatedMinutes} min ·{" "}
-            {song.notes.length} notes · {song.bpm} BPM
+            {baseSong.notes.length} notes · practice at{" "}
+            {Math.round(song.bpm)} BPM ({Math.round(speed * 100)}% speed)
           </p>
           <div className="flex flex-wrap gap-2">
-            <Button size="lg" onClick={startPlay}>
+            <Button size="lg" onClick={() => void beginRound(speed)}>
               Start learning
             </Button>
             <Button variant="secondary" onClick={playDemo} disabled={demoPlaying}>
@@ -208,10 +262,11 @@ export function TunePlayer({ tune, companion, onComplete, onExit }: Props) {
       {phase === "play" && (
         <div className="space-y-4">
           <FallingNotes
-            track={song}
+            track={activeTrack}
             playing={playing}
             elapsedMs={0}
             hitIndices={hitIndices}
+            speed={speed}
           />
           <PianoKeyboard
             startMidi={48}
@@ -239,6 +294,10 @@ export function TunePlayer({ tune, companion, onComplete, onExit }: Props) {
           <h2 className="text-2xl font-bold text-white">
             {stars >= 2 ? `You nailed ${tune.title}!` : "Great practice!"}
           </h2>
+          <p className="text-white/60 text-sm">
+            You practiced at {Math.round(speed * 100)}% speed. Try a little
+            faster next time — only if it still feels fun!
+          </p>
           <div className="flex flex-wrap justify-center gap-2">
             <Button
               onClick={() => {

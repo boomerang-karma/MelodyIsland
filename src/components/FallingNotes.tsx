@@ -9,10 +9,18 @@ interface Props {
   playing: boolean;
   elapsedMs: number;
   hitIndices: Set<number>;
+  /** Learning speed 0.4–1.25 — stretches look-ahead so slow mode feels calmer */
+  speed?: number;
 }
 
 /** Simple falling-note highway — enhance with SpriteKit-class canvas later */
-export function FallingNotes({ track, playing, elapsedMs, hitIndices }: Props) {
+export function FallingNotes({
+  track,
+  playing,
+  elapsedMs,
+  hitIndices,
+  speed = 1,
+}: Props) {
   const [now, setNow] = useState(elapsedMs);
 
   useEffect(() => {
@@ -30,7 +38,8 @@ export function FallingNotes({ track, playing, elapsedMs, hitIndices }: Props) {
     return () => cancelAnimationFrame(raf);
   }, [playing, elapsedMs]);
 
-  const lookAhead = 2500;
+  // More preview time when slower so kids can see notes coming
+  const lookAhead = Math.round(2500 / Math.max(0.5, Math.min(1.25, speed)));
   const visible = track.notes
     .map((n, i) => ({ n, i }))
     .filter(({ n, i }) => {

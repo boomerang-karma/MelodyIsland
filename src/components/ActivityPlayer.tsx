@@ -3,15 +3,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Activity, ActivityResult, AttemptResult, CompanionMood } from "@/modules/core";
 import { pitchLabel } from "@/modules/core";
-import { getSong } from "@/modules/curriculum";
+import { getSong, scaleTrackTempo } from "@/modules/curriculum";
 import { MicNoteInput, TouchNoteInput, playTone } from "@/modules/audio";
 import { Scorer } from "@/modules/scoring";
 import { moodFromTiming } from "@/modules/companion";
 import { CompanionBubble } from "./CompanionBubble";
 import { FallingNotes } from "./FallingNotes";
 import { PianoKeyboard } from "./PianoKeyboard";
+import { SpeedBar } from "./SpeedBar";
 import { Button } from "./ui/Button";
-import type { CompanionState } from "@/modules/core";
+import type { CompanionState, SongTrack } from "@/modules/core";
 
 interface Props {
   activity: Activity;
@@ -21,8 +22,9 @@ interface Props {
 }
 
 export function ActivityPlayer({ activity, companion, onComplete, onExit }: Props) {
-  const song = activity.songId ? getSong(activity.songId) : undefined;
+  const baseSong = activity.songId ? getSong(activity.songId) : undefined;
   const scorerRef = useRef(new Scorer());
+  const trackRef = useRef<SongTrack | null>(null);
   const micRef = useRef<MicNoteInput | null>(null);
   const touchRef = useRef<TouchNoteInput | null>(null);
   const startedAt = useRef(new Date().toISOString());
@@ -44,10 +46,14 @@ export function ActivityPlayer({ activity, companion, onComplete, onExit }: Prop
   const [namingScore, setNamingScore] = useState({ correct: 0, total: 0 });
   const [rhythmBeats, setRhythmBeats] = useState(0);
   const [elapsedMs, setElapsedMs] = useState(0);
+  const [speed, setSpeed] = useState(0.75);
 
+  const song = baseSong ? scaleTrackTempo(baseSong, speed) : undefined;
   const isNaming = activity.type === "note_naming";
   const isRhythm = activity.type === "rhythm_tap";
   const isFree = activity.type === "free_play";
+  const usesFallingNotes =
+    !!baseSong && !isNaming && !isRhythm && !isFree;
 
   const handleNote = useCallback(
     (event: Parameters<MicNoteInput["onNote"] extends (h: infer H) => unknown ? H : never>[0]) => {
@@ -126,9 +132,9 @@ export function ActivityPlayer({ activity, companion, onComplete, onExit }: Prop
       missStreak.current = 0;
       setHitIndices((prev) => {
         const next = new Set(prev);
-        // find index by startMs match
-        if (song) {
-          const idx = song.notes.findIndex(
+        const track = trackRef.current ?? song;
+        if (track) {
+          const idx = track.notes.findIndex(
             (n) =>
               n.startMs === result.expected!.startMs &&
               n.pitch.midi === result.expected!.pitch.midi,
@@ -213,18 +219,23 @@ export function ActivityPlayer({ activity, companion, onComplete, onExit }: Prop
     });
   }
 
-  async function startPlay() {
+  async function startPlay(speedForRound = speed) {
     startedAt.current = new Date().toISOString();
     setPhase("play");
     setHitIndices(new Set());
     setElapsedMs(0);
     missStreak.current = 0;
 
-    if (song) {
-      scorerRef.current.loadTrack(song);
+    if (baseSong) {
+      const track = scaleTrackTempo(baseSong, speedForRound);
+      trackRef.current = track;
+      scorerRef.current = new Scorer({
+        timingWindowMs: Math.round(200 / Math.max(0.5, speedForRound)),
+      });
+      scorerRef.current.loadTrack(track);
       scorerRef.current.allowTouchCredit = useTouch;
       scorerRef.current.begin(performance.now());
-      setProgress({ matched: 0, total: song.notes.length, accuracy: 0 });
+      setProgress({ matched: 0, total: track.notes.length, accuracy: 0 });
     }
 
     if (isNaming) {
@@ -306,14 +317,29 @@ export function ActivityPlayer({ activity, companion, onComplete, onExit }: Prop
         <p className="text-amber-200 text-sm bg-amber-500/20 rounded-xl px-3 py-2">{micError}</p>
       )}
 
+      {usesFallingNotes && (phase === "intro" || phase === "play") && (
+        <SpeedBar
+          value={speed}
+          onChange={(next) => {
+            setSpeed(next);
+            if (phase === "play" && playing) {
+              setFeedback(`Speed ${Math.round(next * 100)}% — restarting gently…`);
+              void startPlay(next);
+            }
+          }}
+        />
+      )}
+
       {phase === "intro" && (
         <div className="space-y-4">
           <p className="text-white/80 text-sm">
             Sessions are short and end on a win. Use a real piano with the mic when you can —
             the on-screen keys are great for note games.
+            {usesFallingNotes &&
+              " Drag the turtle slider if notes fall too fast."}
           </p>
           <div className="flex flex-wrap gap-2">
-            <Button onClick={startPlay} size="lg">
+            <Button onClick={() => void startPlay(speed)} size="lg">
               Let&apos;s play! 🎵
             </Button>
             <Button
@@ -328,12 +354,13 @@ export function ActivityPlayer({ activity, companion, onComplete, onExit }: Prop
 
       {phase === "play" && (
         <div className="space-y-4">
-          {song && !isNaming && !isRhythm && (
+          {usesFallingNotes && (trackRef.current || song) && (
             <FallingNotes
-              track={song}
+              track={trackRef.current ?? song!}
               playing={playing}
               elapsedMs={elapsedMs}
               hitIndices={hitIndices}
+              speed={speed}
             />
           )}
 
