@@ -49,7 +49,7 @@ export function FallingNotes({
     });
 
   return (
-    <div className="relative h-48 sm:h-56 rounded-2xl bg-slate-900/60 border border-white/10 overflow-hidden">
+    <div className="relative h-28 sm:h-36 md:h-40 rounded-2xl bg-slate-900/60 border border-white/10 overflow-hidden">
       {/* Hit line */}
       <div className="absolute bottom-8 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-fuchsia-400 to-transparent" />
       <div className="absolute bottom-6 left-4 text-[10px] uppercase tracking-widest text-white/40">

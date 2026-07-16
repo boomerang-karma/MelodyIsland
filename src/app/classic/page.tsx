@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/Button";
 
 export default function ClassicPianoPage() {
   return (
-    <main className="flex-1 px-4 py-6 sm:px-8 max-w-4xl mx-auto w-full space-y-6">
+    <main className="flex-1 px-3 sm:px-6 py-4 sm:py-6 max-w-5xl mx-auto w-full space-y-4 sm:space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-amber-200/60 text-xs uppercase tracking-[0.2em]">

@@ -268,12 +268,13 @@ export function TunePlayer({ tune, companion, onComplete, onExit }: Props) {
             hitIndices={hitIndices}
             speed={speed}
           />
-          <PianoKeyboard
-            startMidi={48}
-            whiteKeys={15}
-            highlightMidi={lastMidi}
-            onNote={(midi) => touchRef.current?.press(midi)}
-          />
+          <div className="piano-stage piano-stage--hero">
+            <PianoKeyboard
+              size="kid"
+              highlightMidi={lastMidi}
+              onNote={(midi) => touchRef.current?.press(midi)}
+            />
+          </div>
           <div className="flex justify-between text-white/70 text-sm">
             <span>
               Notes {progress.matched}/{progress.total}

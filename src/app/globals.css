@@ -65,3 +65,37 @@ body {
   outline: 3px solid #f0abfc;
   outline-offset: 3px;
 }
+
+/* Piano: fat keys, no text selection, smooth iPad touch */
+.piano-keys {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.piano-keys button {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+/* Edge-to-edge keyboard band on tablets */
+.piano-stage {
+  width: 100%;
+  max-width: 100%;
+}
+
+@media (min-width: 768px) and (max-width: 1024px) {
+  /* iPad mini / iPad portrait — keyboard owns the lower half */
+  .piano-stage.piano-stage--hero {
+    margin-left: -0.5rem;
+    margin-right: -0.5rem;
+    width: calc(100% + 1rem);
+  }
+}
+
+@supports (height: 100dvh) {
+  .piano-keys {
+    /* Prefer dynamic viewport so keyboard stays big with browser chrome */
+    max-height: 50dvh;
+  }
+}

@@ -29,7 +29,7 @@ export default function ActivityClient() {
   }
 
   return (
-    <main className="flex-1 px-4 py-6 sm:px-8 max-w-3xl mx-auto w-full">
+    <main className="flex-1 px-2 sm:px-4 py-3 sm:py-5 max-w-5xl mx-auto w-full">
       <ActivityPlayer
         activity={activity}
         companion={progress.profile.companion}

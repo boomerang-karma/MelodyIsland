@@ -411,15 +411,16 @@ export function ActivityPlayer({ activity, companion, onComplete, onExit }: Prop
           )}
 
           {(song || isNaming || isFree) && !isRhythm && (
-            <PianoKeyboard
-              startMidi={48}
-              whiteKeys={15}
-              highlightMidi={lastMidi}
-              blackKeysOnly={!!song?.blackKeysOnly && !useTouch}
-              onNote={(midi) => {
-                touchRef.current?.press(midi);
-              }}
-            />
+            <div className="piano-stage piano-stage--hero">
+              <PianoKeyboard
+                size="kid"
+                highlightMidi={lastMidi}
+                blackKeysOnly={!!song?.blackKeysOnly && !useTouch}
+                onNote={(midi) => {
+                  touchRef.current?.press(midi);
+                }}
+              />
+            </div>
           )}
 
           {song && (

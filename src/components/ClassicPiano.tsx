@@ -107,10 +107,10 @@ export function ClassicPiano() {
           </div>
         </div>
 
-        <div className="rounded-2xl bg-black/40 border border-white/5 p-2 sm:p-3">
+        <div className="piano-stage piano-stage--hero rounded-2xl bg-black/40 border border-white/5 p-1.5 sm:p-2">
           <PianoKeyboard
+            size="kid"
             startMidi={startMidi}
-            whiteKeys={15}
             highlightMidi={lastMidi}
             showLabels={labels}
             playSound
