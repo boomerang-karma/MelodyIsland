@@ -48,6 +48,16 @@ export default function HomePage() {
             <Button size="lg">Start your adventure</Button>
           </Link>
         )}
+        <Link href="/classic">
+          <Button variant="secondary" size="lg">
+            Classic Piano
+          </Button>
+        </Link>
+        <Link href="/tunes">
+          <Button variant="secondary" size="lg">
+            Famous Tunes
+          </Button>
+        </Link>
         <Link href="/free-play">
           <Button variant="ghost" size="lg">
             Free Play sandbox
@@ -63,14 +73,14 @@ export default function HomePage() {
             e: "🗺️",
           },
           {
-            t: "Listens to your piano",
-            d: "Mic + YIN pitch detection, MIDI-ready adapters, kind scoring with timing windows.",
-            e: "🎤",
+            t: "Famous tunes",
+            d: "Learn Golden, Takedown, Happy Birthday, Jingle Bells, and more — simplified for kids.",
+            e: "✨",
           },
           {
-            t: "Kid fun / parent data",
-            d: "Stars & companions for kids. Accuracy, streaks, and skill radar for grown-ups.",
-            e: "📊",
+            t: "Classic piano",
+            d: "A beautiful free piano with metronome, labels, and mic listening — no pressure.",
+            e: "🎹",
           },
         ].map((card) => (
           <div

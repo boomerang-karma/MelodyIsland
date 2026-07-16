@@ -60,8 +60,16 @@ export default function PlayHubPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <Button onClick={startSmartSession}>Today&apos;s adventure</Button>
+          <Link href="/tunes">
+            <Button variant="secondary">Famous tunes</Button>
+          </Link>
+          <Link href="/classic">
+            <Button variant="secondary">Classic piano</Button>
+          </Link>
           <Link href="/free-play">
-            <Button variant="secondary">Free Play</Button>
+            <Button variant="ghost" size="sm">
+              Free Play
+            </Button>
           </Link>
           <Link href="/parent">
             <Button variant="ghost" size="sm">

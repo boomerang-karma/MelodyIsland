@@ -137,6 +137,6 @@ export const SONGS: SongTrack[] = [
   },
 ];
 
-export function getSong(id: string): SongTrack | undefined {
+export function getCurriculumSong(id: string): SongTrack | undefined {
   return SONGS.find((s) => s.id === id);
 }

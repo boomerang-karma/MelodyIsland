@@ -82,6 +82,22 @@ export interface SongTrack {
   skillIds: string[];
   blackKeysOnly?: boolean;
   handsTogether?: boolean;
+  /** Catalog tags e.g. classic, famous, island */
+  tags?: string[];
+}
+
+/** Famous / classic tune listing (content as data). */
+export interface FamousTune {
+  id: string;
+  title: string;
+  /** Display credit — simplified educational arrangements */
+  artist: string;
+  emoji: string;
+  blurb: string;
+  difficulty: 1 | 2 | 3;
+  songId: string;
+  tags: string[];
+  estimatedMinutes: number;
 }
 
 export interface Activity {

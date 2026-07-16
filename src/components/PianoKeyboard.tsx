@@ -19,6 +19,10 @@ interface Props {
   onNote?: (midi: number) => void;
   blackKeysOnly?: boolean;
   showLabels?: boolean;
+  /** Tone length when this keyboard plays sound itself */
+  noteDurationMs?: number;
+  /** Set false if parent owns audio (e.g. classic sustain) */
+  playSound?: boolean;
 }
 
 export function PianoKeyboard({
@@ -28,6 +32,8 @@ export function PianoKeyboard({
   onNote,
   blackKeysOnly = false,
   showLabels = true,
+  noteDurationMs = 350,
+  playSound = true,
 }: Props) {
   const whites: number[] = [];
   let midi = startMidi;
@@ -50,8 +56,10 @@ export function PianoKeyboard({
   });
 
   const press = (m: number) => {
-    const pitch = midiToPitch(m);
-    playTone(pitch.frequencyHz, 350, 0.25);
+    if (playSound) {
+      const pitch = midiToPitch(m);
+      playTone(pitch.frequencyHz, noteDurationMs, 0.25);
+    }
     onNote?.(m);
   };
 
