@@ -3,7 +3,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ActivityResult, CompanionMood, FamousTune } from "@/modules/core";
 import { pitchLabel, type SongTrack } from "@/modules/core";
-import { getFamousSong, scaleTrackTempo } from "@/modules/curriculum";
+import {
+  getFamousSong,
+  nextGuideMidis,
+  scaleTrackTempo,
+} from "@/modules/curriculum";
 import { MicNoteInput, TouchNoteInput, playTone } from "@/modules/audio";
 import { Scorer } from "@/modules/scoring";
 import { moodFromTiming } from "@/modules/companion";
@@ -215,6 +219,10 @@ export function TunePlayer({ tune, companion, onComplete, onExit }: Props) {
 
   const diffStars = "★".repeat(tune.difficulty) + "☆".repeat(3 - tune.difficulty);
   const activeTrack = trackRef.current && phase === "play" ? trackRef.current : song;
+  const guideMidis =
+    phase === "play" && activeTrack
+      ? nextGuideMidis(activeTrack, hitIndices)
+      : [];
 
   return (
     <div className="space-y-4">
@@ -290,9 +298,17 @@ export function TunePlayer({ tune, companion, onComplete, onExit }: Props) {
           </div>
 
           <div className="piano-stage piano-stage--hero">
+            {guideMidis.length > 0 && (
+              <p className="text-center text-amber-200 text-sm font-semibold mb-2">
+                👉 Press the glowing key
+                {guideMidis.length > 1 ? "s together" : ""}!
+              </p>
+            )}
             <PianoKeyboard
               size="kid"
+              multiTouch
               highlightMidi={lastMidi}
+              guideMidis={guideMidis}
               onNote={(midi) => touchRef.current?.press(midi)}
             />
           </div>

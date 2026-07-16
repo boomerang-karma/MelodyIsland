@@ -4,4 +4,5 @@ export * from "./islands";
 export * from "./famous-tunes";
 export * from "./resolve-song";
 export * from "./tempo";
+export * from "./guide-keys";
 

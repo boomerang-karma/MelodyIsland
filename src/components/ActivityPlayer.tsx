@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Activity, ActivityResult, AttemptResult, CompanionMood } from "@/modules/core";
 import { pitchLabel } from "@/modules/core";
-import { getSong, scaleTrackTempo } from "@/modules/curriculum";
+import { getSong, nextGuideMidis, scaleTrackTempo } from "@/modules/curriculum";
 import { MicNoteInput, TouchNoteInput, playTone } from "@/modules/audio";
 import { Scorer } from "@/modules/scoring";
 import { moodFromTiming } from "@/modules/companion";
@@ -429,14 +429,44 @@ export function ActivityPlayer({ activity, companion, onComplete, onExit }: Prop
 
           {(song || isNaming || isFree) && !isRhythm && (
             <div className="piano-stage piano-stage--hero">
-              <PianoKeyboard
-                size="kid"
-                highlightMidi={lastMidi}
-                blackKeysOnly={!!song?.blackKeysOnly && !useTouch}
-                onNote={(midi) => {
-                  touchRef.current?.press(midi);
-                }}
-              />
+              {usesFallingNotes &&
+                (() => {
+                  const track = trackRef.current ?? song;
+                  const guides = track
+                    ? nextGuideMidis(track, hitIndices)
+                    : [];
+                  return (
+                    <>
+                      {guides.length > 0 && (
+                        <p className="text-center text-amber-200 text-sm font-semibold mb-2">
+                          👉 Press the glowing key
+                          {guides.length > 1 ? "s together" : ""}!
+                        </p>
+                      )}
+                      <PianoKeyboard
+                        size="kid"
+                        multiTouch
+                        highlightMidi={lastMidi}
+                        guideMidis={guides}
+                        blackKeysOnly={!!song?.blackKeysOnly && !useTouch}
+                        onNote={(midi) => {
+                          touchRef.current?.press(midi);
+                        }}
+                      />
+                    </>
+                  );
+                })()}
+              {!usesFallingNotes && (
+                <PianoKeyboard
+                  size="kid"
+                  multiTouch
+                  highlightMidi={lastMidi}
+                  blackKeysOnly={!!song?.blackKeysOnly && !useTouch}
+                  onNote={(midi) => {
+                    touchRef.current?.press(midi);
+                  }}
+                />
+              )}
             </div>
           )}
 

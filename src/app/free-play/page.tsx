@@ -114,6 +114,7 @@ export default function FreePlayPage() {
       <div className="piano-stage piano-stage--hero">
         <PianoKeyboard
           size="kid"
+          multiTouch
           highlightMidi={lastMidi}
           onNote={(midi) => touchRef.current?.press(midi)}
         />

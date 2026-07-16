@@ -1,5 +1,6 @@
 "use client";
 
+import { useCallback, useRef, useState } from "react";
 import { midiToPitch, pitchLabel, type NoteName } from "@/modules/core";
 import { playTone } from "@/modules/audio";
 
@@ -16,20 +17,24 @@ export type PianoSize = "kid" | "classic" | "compact";
 interface Props {
   startMidi?: number;
   whiteKeys?: number;
+  /** Keys just pressed (feedback) — number or set */
   highlightMidi?: number | null;
+  highlightMidis?: number[];
+  /**
+   * Keys the kid should press next (learning guide).
+   * Glows so they can follow without reading notes.
+   */
+  guideMidis?: number[];
   onNote?: (midi: number) => void;
+  /** Fired once when a multi-touch chord is held (2+ keys) */
+  onChord?: (midis: number[]) => void;
   blackKeysOnly?: boolean;
   showLabels?: boolean;
-  /** Tone length when this keyboard plays sound itself */
   noteDurationMs?: number;
-  /** Set false if parent owns audio (e.g. classic sustain) */
   playSound?: boolean;
-  /**
-   * kid (default) — huge keys for iPad mini / little fingers
-   * classic — tall stage piano
-   * compact — denser (more octaves)
-   */
   size?: PianoSize;
+  /** Allow pressing several keys at once (default true) */
+  multiTouch?: boolean;
 }
 
 const SIZE_CONFIG: Record<
@@ -45,11 +50,13 @@ const SIZE_CONFIG: Record<
   }
 > = {
   kid: {
-    // Fewer keys = each key is wider (better for small hands on iPad mini)
-    defaultWhiteKeys: 11,
-    defaultStartMidi: 53, // F3 → covers common beginner range through C5
-    heightClass: "h-[min(42dvh,320px)] min-h-[220px] sm:h-[min(48dvh,380px)] sm:min-h-[260px]",
-    labelClass: "bottom-3 sm:bottom-4 text-sm sm:text-base font-bold text-slate-700",
+    // Wider keys; 12 whites ≈ F3–C5 covers most kid tunes
+    defaultWhiteKeys: 12,
+    defaultStartMidi: 53,
+    heightClass:
+      "h-[min(42dvh,320px)] min-h-[220px] sm:h-[min(48dvh,380px)] sm:min-h-[260px]",
+    labelClass:
+      "bottom-3 sm:bottom-4 text-sm sm:text-base font-bold text-slate-700",
     blackLabelClass: "bottom-2 text-[11px] sm:text-xs font-bold text-white/90",
     blackHeight: "h-[58%]",
     radius: "rounded-b-2xl",
@@ -78,16 +85,24 @@ export function PianoKeyboard({
   startMidi,
   whiteKeys,
   highlightMidi = null,
+  highlightMidis = [],
+  guideMidis = [],
   onNote,
+  onChord,
   blackKeysOnly = false,
   showLabels = true,
   noteDurationMs = 350,
   playSound = true,
   size = "kid",
+  multiTouch = true,
 }: Props) {
   const cfg = SIZE_CONFIG[size];
   const start = startMidi ?? cfg.defaultStartMidi;
   const count = whiteKeys ?? cfg.defaultWhiteKeys;
+
+  /** pointerId → midi for multi-touch tracking */
+  const pointers = useRef(new Map<number, number>());
+  const [heldMidis, setHeldMidis] = useState<Set<number>>(() => new Set());
 
   const whites: number[] = [];
   let midi = start;
@@ -109,55 +124,147 @@ export function PianoKeyboard({
     }
   });
 
-  const press = (m: number) => {
-    if (playSound) {
-      const pitch = midiToPitch(m);
-      playTone(pitch.frequencyHz, noteDurationMs, 0.28);
-    }
-    onNote?.(m);
-  };
+  const guideSet = new Set(guideMidis);
+  const highlightSet = new Set(
+    [
+      ...(highlightMidi != null ? [highlightMidi] : []),
+      ...highlightMidis,
+    ].filter((n) => n != null),
+  );
+
+  const pressDown = useCallback(
+    (m: number, pointerId: number) => {
+      if (!multiTouch && pointers.current.size > 0) return;
+
+      // Don't re-fire same key held by another finger
+      for (const existing of pointers.current.values()) {
+        if (existing === m) return;
+      }
+
+      pointers.current.set(pointerId, m);
+      setHeldMidis(new Set(pointers.current.values()));
+
+      if (playSound) {
+        const pitch = midiToPitch(m);
+        playTone(pitch.frequencyHz, noteDurationMs, 0.28);
+      }
+      onNote?.(m);
+
+      const held = [...new Set(pointers.current.values())];
+      if (held.length >= 2) {
+        onChord?.(held);
+      }
+    },
+    [multiTouch, playSound, noteDurationMs, onNote, onChord],
+  );
+
+  const pressUp = useCallback((pointerId: number) => {
+    if (!pointers.current.has(pointerId)) return;
+    pointers.current.delete(pointerId);
+    setHeldMidis(new Set(pointers.current.values()));
+  }, []);
 
   const keyWidth = 100 / count;
+
+  function keyClasses(m: number, isBlack: boolean) {
+    const isGuide = guideSet.has(m);
+    const isHeld = heldMidis.has(m);
+    const isHit = highlightSet.has(m);
+    const dim = blackKeysOnly && !isBlack;
+
+    if (dim) {
+      return isBlack
+        ? "bg-slate-700 opacity-40"
+        : "bg-slate-200 opacity-35";
+    }
+
+    if (isGuide && isHeld) {
+      return isBlack
+        ? "bg-emerald-500 border-emerald-200 scale-[0.98] key-guide-hit"
+        : "bg-emerald-300 border-emerald-500 scale-[0.98] key-guide-hit";
+    }
+    if (isGuide) {
+      return isBlack
+        ? "bg-amber-400 border-yellow-200 key-guide-glow"
+        : "bg-amber-200 border-amber-400 key-guide-glow text-amber-950";
+    }
+    if (isHeld || isHit) {
+      return isBlack
+        ? "bg-violet-600 border-violet-300 scale-[0.98]"
+        : "bg-violet-300 border-violet-500 scale-[0.98]";
+    }
+    return isBlack
+      ? "bg-gradient-to-b from-slate-800 to-black border-black"
+      : "bg-gradient-to-b from-white to-slate-100 border-slate-400/80";
+  }
+
+  function bindKey(m: number, disabled: boolean) {
+    return {
+      onPointerDown: (e: React.PointerEvent<HTMLButtonElement>) => {
+        if (disabled) return;
+        e.preventDefault();
+        e.stopPropagation();
+        try {
+          e.currentTarget.setPointerCapture(e.pointerId);
+        } catch {
+          /* ignore */
+        }
+        pressDown(m, e.pointerId);
+      },
+      onPointerUp: (e: React.PointerEvent<HTMLButtonElement>) => {
+        pressUp(e.pointerId);
+      },
+      onPointerCancel: (e: React.PointerEvent<HTMLButtonElement>) => {
+        pressUp(e.pointerId);
+      },
+      onLostPointerCapture: (e: React.PointerEvent<HTMLButtonElement>) => {
+        pressUp(e.pointerId);
+      },
+    };
+  }
 
   return (
     <div
       className={`piano-keys relative w-full select-none touch-manipulation ${cfg.heightClass}`}
       role="group"
-      aria-label="Piano keyboard"
+      aria-label="Piano keyboard — multi-touch supported"
+      // Allow multiple simultaneous touches on children
+      style={{ touchAction: "none" }}
     >
-      {/* White keys — full width, fat for little fingers */}
+      {guideMidis.length > 0 && (
+        <p className="sr-only">
+          Press glowing key
+          {guideMidis.length > 1 ? "s" : ""}:{" "}
+          {guideMidis.map((m) => pitchLabel(midiToPitch(m))).join(" and ")}
+        </p>
+      )}
+
       <div className="absolute inset-0 flex gap-0.5 sm:gap-1 px-0.5">
         {whites.map((m) => {
           const p = midiToPitch(m);
-          const active = highlightMidi === m;
-          const dim = blackKeysOnly;
+          const isGuide = guideSet.has(m);
           return (
             <button
               key={m}
               type="button"
               disabled={blackKeysOnly}
-              // pointer events = instant on iPad (no 300ms click lag)
-              onPointerDown={(e) => {
-                if (blackKeysOnly) return;
-                e.preventDefault();
-                (e.currentTarget as HTMLButtonElement).setPointerCapture?.(
-                  e.pointerId,
-                );
-                press(m);
-              }}
-              className={`relative flex-1 border-2 sm:border-[3px] border-slate-400/80 ${cfg.radius} shadow-md transition-transform duration-75 active:translate-y-1 active:brightness-95 ${
-                dim
-                  ? "bg-slate-200 opacity-35"
-                  : active
-                    ? "bg-violet-300 border-violet-500 scale-[0.98]"
-                    : "bg-gradient-to-b from-white to-slate-100"
-              }`}
-              style={{ minWidth: 0, touchAction: "manipulation" }}
-              aria-label={pitchLabel(p)}
+              {...bindKey(m, blackKeysOnly)}
+              className={`relative flex-1 border-2 sm:border-[3px] ${cfg.radius} shadow-md transition-all duration-100 ${keyClasses(m, false)}`}
+              style={{ minWidth: 0, touchAction: "none" }}
+              aria-label={`${pitchLabel(p)}${isGuide ? " — press this" : ""}`}
+              aria-pressed={heldMidis.has(m)}
             >
+              {isGuide && (
+                <span
+                  className="absolute top-2 left-1/2 -translate-x-1/2 w-2.5 h-2.5 rounded-full bg-amber-500 animate-ping"
+                  aria-hidden
+                />
+              )}
               {showLabels && (
                 <span
-                  className={`absolute left-0 right-0 text-center pointer-events-none ${cfg.labelClass}`}
+                  className={`absolute left-0 right-0 text-center pointer-events-none ${cfg.labelClass} ${
+                    isGuide ? "!text-amber-950" : ""
+                  }`}
                 >
                   {p.note}
                   <span className="block text-[0.65em] opacity-60 font-medium">
@@ -170,38 +277,34 @@ export function PianoKeyboard({
         })}
       </div>
 
-      {/* Black keys — shorter but still wide enough to hit */}
       <div
         className={`absolute top-0 left-0 right-0 ${cfg.blackHeight} pointer-events-none px-0.5`}
       >
         {blacks.map(({ midi: m, left }) => {
-          const active = highlightMidi === m;
+          const isGuide = guideSet.has(m);
           return (
             <button
               key={m}
               type="button"
-              onPointerDown={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                (e.currentTarget as HTMLButtonElement).setPointerCapture?.(
-                  e.pointerId,
-                );
-                press(m);
-              }}
-              className={`absolute pointer-events-auto rounded-b-xl border-2 border-black shadow-lg transition-transform duration-75 active:translate-y-0.5 ${
-                active
-                  ? "bg-violet-600 border-violet-300 scale-[0.98]"
-                  : "bg-gradient-to-b from-slate-800 to-black"
-              }`}
+              {...bindKey(m, false)}
+              className={`absolute pointer-events-auto rounded-b-xl border-2 shadow-lg transition-all duration-100 ${keyClasses(m, true)}`}
               style={{
                 left: `calc(${left * keyWidth}% + 2px)`,
                 width: `calc(${keyWidth * 0.62}% - 4px)`,
                 height: "100%",
                 minWidth: size === "kid" ? 28 : 18,
-                touchAction: "manipulation",
+                touchAction: "none",
+                zIndex: isGuide ? 5 : 2,
               }}
-              aria-label={pitchLabel(midiToPitch(m))}
+              aria-label={`${pitchLabel(midiToPitch(m))}${isGuide ? " — press this" : ""}`}
+              aria-pressed={heldMidis.has(m)}
             >
+              {isGuide && (
+                <span
+                  className="absolute top-1 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-yellow-300 animate-ping"
+                  aria-hidden
+                />
+              )}
               {showLabels && (
                 <span
                   className={`absolute left-0 right-0 text-center pointer-events-none ${cfg.blackLabelClass}`}

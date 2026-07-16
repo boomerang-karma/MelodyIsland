@@ -99,3 +99,27 @@ body {
     max-height: 50dvh;
   }
 }
+
+/* Learning guide: “press this key” glow */
+@keyframes key-guide-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 0 rgba(251, 191, 36, 0.75),
+      0 0 20px 4px rgba(251, 191, 36, 0.45);
+  }
+  50% {
+    box-shadow:
+      0 0 0 6px rgba(251, 191, 36, 0.15),
+      0 0 28px 10px rgba(251, 191, 36, 0.55);
+  }
+}
+
+.key-guide-glow {
+  animation: key-guide-pulse 1s ease-in-out infinite;
+  z-index: 3;
+}
+
+.key-guide-hit {
+  box-shadow: 0 0 18px 4px rgba(52, 211, 153, 0.65);
+}

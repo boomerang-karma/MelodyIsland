@@ -110,6 +110,7 @@ export function ClassicPiano() {
         <div className="piano-stage piano-stage--hero rounded-2xl bg-black/40 border border-white/5 p-1.5 sm:p-2">
           <PianoKeyboard
             size="kid"
+            multiTouch
             startMidi={startMidi}
             highlightMidi={lastMidi}
             showLabels={labels}
