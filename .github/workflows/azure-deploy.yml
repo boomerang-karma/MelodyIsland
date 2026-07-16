@@ -1,0 +1,52 @@
+name: Deploy to Azure App Service
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  AZURE_WEBAPP_NAME: melody-islands-app
+  NODE_VERSION: "20.x"
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+
+      - name: Package standalone
+        run: |
+          # Prefer standalone output when configured
+          if [ -d .next/standalone ]; then
+            cp -r .next/static .next/standalone/.next/static
+            cp -r public .next/standalone/public
+            cd .next/standalone && zip -r ../../release.zip . && cd ../..
+          else
+            zip -r release.zip .next public package.json package-lock.json next.config.ts node_modules
+          fi
+
+      - name: Deploy to Azure Web App
+        uses: azure/webapps-deploy@v3
+        if: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE != '' }}
+        with:
+          app-name: ${{ env.AZURE_WEBAPP_NAME }}
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          package: release.zip
